@@ -1,0 +1,30 @@
+services:
+  vault:
+    image: hashicorp/vault:1.17
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: vaultly-dev-root-token
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8200/v1/sys/health?standbyok=true"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  vaultly:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      VAULTLY_VAULT_ADDR: http://vault:8200
+      VAULTLY_VAULT_AUTH_METHOD: token
+      VAULTLY_VAULT_TOKEN: vaultly-dev-root-token
+      VAULTLY_API_BEARER_TOKEN: local-dev-token
+    depends_on:
+      vault:
+        condition: service_healthy

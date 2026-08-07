@@ -1,0 +1,54 @@
+name: CI
+
+# Deliberately minimal: lint + test only, to prove the app itself works.
+# Trivy / SAST / dependency scanning / OIDC cloud auth are NOT here on
+# purpose -- they're part of the DevSecOps lab that deploys this app
+# (see project.md), not the application repo itself.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      vault:
+        image: hashicorp/vault:1.17
+        ports:
+          - 8200:8200
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: vaultly-dev-root-token
+          VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+        options: >-
+          --cap-add=IPC_LOCK
+          --health-cmd="wget -q -O- http://127.0.0.1:8200/v1/sys/health?standbyok=true"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+
+    env:
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_TOKEN: vaultly-dev-root-token
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest -v
+
+      - name: Build image
+        run: docker build -f docker/Dockerfile -t vaultly:ci .
