@@ -74,8 +74,8 @@ Tests that need Vault auto-skip with a clear message if no dev server is reachab
 
 All `/api/v1/*` routes require `Authorization: Bearer <VAULTLY_API_BEARER_TOKEN>`.
 
-| Method | Path                          | Description                                   |
-|--------|-------------------------------|------------------------------------------------|
+| Method | Path                          | Description                                     |
+|--------|-------------------------------|-------------------------------------------------|
 | GET    | `/healthz`                    | Liveness probe                                  |
 | GET    | `/readyz`                     | Readiness probe (checks Vault session is valid) |
 | GET    | `/api/v1/secrets/{path}`      | Read a secret                                   |
