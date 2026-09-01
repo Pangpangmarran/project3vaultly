@@ -1,0 +1,39 @@
+Project 3 — Vaultly / AWS / Terraform — Decisions
+Cloud Provider — AWS
+Not Azure. AWS has better Vault/KMS integration docs and more community examples for EKS + KMS auto-unseal.
+
+IaC Tool — Terraform
+Covers all cloud infra (VPC, EKS, KMS, IAM, OIDC provider). Single tool, HCL is readable, state is manageable at this project's scale.
+
+Local Practice — kind (3 nodes: 1 CP + 2 workers)
+Fast, disposable, runs in Docker. No cost, no cloud account needed while learning.
+
+Final Deliverable — EKS
+Production-grade Kubernetes. Required for the OIDC → AWS STS flow and KMS auto-unseal to make sense.
+
+Vault Storage — Raft (HA, 3 replicas)
+No external dependency (no Consul, no etcd). Self-contained, simpler to reason about, matches the 3-node topology.
+
+Unseal (kind) — Shamir, 5 shares / 3 threshold
+Manual unseal teaches the mechanism. 5/3 means you can lose 2 keys and still recover.
+
+Unseal (EKS) — AWS KMS auto-unseal
+No manual step on pod restart. KMS key is scoped to the Vault cluster, so only Vault can use it.
+
+CI/CD — GitHub Actions
+Free for private repos, native OIDC provider (no long-lived keys), easy YAML.
+
+Cloud Auth from CI — OIDC (GitHub → AWS STS)
+No long-lived IAM access keys stored anywhere. Each run gets a short-lived token scoped to the role.
+
+App-Level CI Scope — lint + test + build only
+Trivy, SAST, dependency scanning, OIDC cloud auth are part of the DevSecOps pipeline (separate workflow), not the app repo.
+
+Token Strategy — dev token → root token → ServiceAccount/AppRole
+CI uses a hardcoded dev token (safe, single-node). kind uses the root token (local only). EKS uses a Kubernetes ServiceAccount or AppRole — no root tokens in prod.
+
+App — Vaultly (Python/FastAPI, KV v2)
+Talks to Vault via VAULT_ADDR + VAULT_TOKEN env vars. Code is agnostic to unseal mode or cluster type.
+
+kind Config — infra/kind/kind-config.yaml
+Lives in the repo, version-controlled.
