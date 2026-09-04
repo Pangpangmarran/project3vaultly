@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+.env
+.DS_Store
+linux-amd64
+
+# Lab assignment document lives alongside this repo locally but is not
+# part of the published Vaultly application.
+project.md
