@@ -8,7 +8,8 @@ venv/
 .env
 .DS_Store
 linux-amd64
+project.md
+.vault-local-credentials
 
 # Lab assignment document lives alongside this repo locally but is not
 # part of the published Vaultly application.
-project.md

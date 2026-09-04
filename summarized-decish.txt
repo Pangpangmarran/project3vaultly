@@ -1,39 +1,78 @@
 Project 3 — Vaultly / AWS / Terraform — Decisions
-Cloud Provider — AWS
-Not Azure. AWS has better Vault/KMS integration docs and more community examples for EKS + KMS auto-unseal.
 
-IaC Tool — Terraform
-Covers all cloud infra (VPC, EKS, KMS, IAM, OIDC provider). Single tool, HCL is readable, state is manageable at this project's scale.
+KEY CONFIG FACTS:
 
-Local Practice — kind (3 nodes: 1 CP + 2 workers)
-Fast, disposable, runs in Docker. No cost, no cloud account needed while learning.
+- App port: 8080
+- App routes: /healthz, /readyz, /api/v1/secrets/{path}
+- Vault address from pod: http://vault-active.vault.svc:8200
+- Vault env prefix: VAULTLY_
+- VAULTLY_VAULT_AUTH_METHOD = kubernetes
+- VAULTLY_VAULT_K8S_ROLE = vaultly
+- serviceAccountName: vaultly-sa
+- App KV path = URL path directly. Policy restricts to vaultly/* so all API calls must use /api/v1/secrets/vaultly/...
+- Root token: hvs.xxxxxxxxxxxxx (still needed for admin ops, NOT used by app)
+- Unseal keys: 5 shares, threshold 3 (saved by user)
+- Control-plane taint removed (re-do if cluster recreated)
+- vaultly-secrets k8s secret still exists (can be deleted, no longer referenced)
+- VAULTLY_API_BEARER_TOKEN still hardcoded in YAML (move to secret later)
 
-Final Deliverable — EKS
-Production-grade Kubernetes. Required for the OIDC → AWS STS flow and KMS auto-unseal to make sense.
+PROJECT 3 — DECISIONS
+=====================
 
-Vault Storage — Raft (HA, 3 replicas)
-No external dependency (no Consul, no etcd). Self-contained, simpler to reason about, matches the 3-node topology.
+DECIDED (cloud-agnostic, safe to build on)
+------------------------------------------
 
-Unseal (kind) — Shamir, 5 shares / 3 threshold
-Manual unseal teaches the mechanism. 5/3 means you can lose 2 keys and still recover.
+[x] App is Vaultly (Python/FastAPI, KV v2)
+    Cloned, run locally, tested. PUT/GET verified.
+    Talks to Vault via VAULT_ADDR + VAULT_TOKEN env vars.
 
-Unseal (EKS) — AWS KMS auto-unseal
-No manual step on pod restart. KMS key is scoped to the Vault cluster, so only Vault can use it.
+[x] Vault storage is Raft (HA, 3 replicas)
+    Running on kind. 3 pods, self-contained, no external dep.
 
-CI/CD — GitHub Actions
-Free for private repos, native OIDC provider (no long-lived keys), easy YAML.
+[x] Local practice is kind (1 CP + 2 workers)
+    Cluster "vaultly" running, 3 nodes Ready.
 
-Cloud Auth from CI — OIDC (GitHub → AWS STS)
-No long-lived IAM access keys stored anywhere. Each run gets a short-lived token scoped to the role.
+[x] kind config lives in repo at infra/kind/kind-config.yaml
+    Version-controlled, in use.
 
-App-Level CI Scope — lint + test + build only
-Trivy, SAST, dependency scanning, OIDC cloud auth are part of the DevSecOps pipeline (separate workflow), not the app repo.
+[x] Token strategy — root token (kind, local only)
+    Root token saved, used in vaultly-secrets k8s secret.
+    ServiceAccount/AppRole for prod is NOT done yet.
 
-Token Strategy — dev token → root token → ServiceAccount/AppRole
-CI uses a hardcoded dev token (safe, single-node). kind uses the root token (local only). EKS uses a Kubernetes ServiceAccount or AppRole — no root tokens in prod.
+[ ] IaC tool is Terraform
+    Decided, but no .tf files written yet.
 
-App — Vaultly (Python/FastAPI, KV v2)
-Talks to Vault via VAULT_ADDR + VAULT_TOKEN env vars. Code is agnostic to unseal mode or cluster type.
+[ ] CI/CD tool is GitHub Actions
+    Decided, but no workflow YAML written yet.
 
-kind Config — infra/kind/kind-config.yaml
-Lives in the repo, version-controlled.
+[ ] App-level CI scope is lint + test + build only
+    Decided, not implemented.
+
+[ ] No secrets in pipeline env vars
+    Decided, not implemented (no pipeline exists yet).
+
+
+NOT DECIDED (hosting-dependent, may change if Azure)
+-----------------------------------------------------
+
+[ ] Cloud provider (AWS or Azure)
+[ ] Final Kubernetes deliverable (EKS or AKS)
+[ ] Auto-unseal mechanism (AWS KMS or Azure Key Vault)
+[ ] Cloud auth from CI (OIDC to AWS STS or Azure AD)
+[ ] VPC/VNet layout and Terraform module (aws vs azurerm)
+[ ] Security posture tooling (GuardDuty or Defender for Cloud)
+[ ] Audit logging (CloudTrail to S3 or Activity Log to Storage Account)
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+KEY LESSONS / NOTES:
+
+- App uses VAULTLY_ prefix on ALL env vars
+- VAULTLY_VAULT_ADDR must be http://vault-active.vault.svc:8200 (not vault.vault.svc)
+- App KV path = URL path. Policy path secret/data/vaultly/* means API calls must target /api/v1/secrets/vaultly/...
+- Heredocs break in this terminal — use echo lines to build files instead
+- kind get kubeconfig --name vaultly > ~/.kube/config fixes kubectl connection
+- User gets burned out easily — keep chunks short, one thing at a time
+- User prefers objective/educational tone over direct "you" speak
+- User tends to typo vaultly vs vaulty — double-check namespace names
+- WSL2: VS Code auto-forwards Vault 8200, NOT app port 8080

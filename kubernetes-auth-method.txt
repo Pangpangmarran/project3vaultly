@@ -1,0 +1,75 @@
+Kubernetes auth method — how it works
+
+1. Pod identity. A pod is assigned a ServiceAccount via serviceAccountName in its spec. Kubernetes automatically mounts a signed JWT at /var/run/secrets/kubernetes.io/serviceaccount/token inside the container. This JWT is short-lived and scoped to that specific ServiceAccount and namespace.
+
+2. Login request. The application sends a POST to Vault's /v1/auth/kubernetes/login endpoint with two parameters: the JWT and a role name.
+
+3. Token verification. Vault, which holds a ServiceAccount bound to the system:auth-delegator ClusterRole, calls the Kubernetes TokenReview API. The API confirms the JWT is valid and identifies the issuing ServiceAccount and namespace.
+
+4. Role binding check. The Vault role (e.g. vaultly) specifies which ServiceAccount names and namespaces are permitted to assume it. If the verified identity matches, the login succeeds.
+
+5. Scoped token issuance. Vault returns a new token with a defined TTL (e.g. 1h) and an attached policy. The policy restricts access to specific KV paths. The token expires and must be renewed by repeating the login flow.
+
+6. KV operations. All subsequent read/write calls use the scoped token. Paths outside the policy result in a 403.
+--------------------------------------------------------------
+
+Notes on HA mode, 3 replicas and local testing with kind and Docker:
+
+**Why 3 replicas:**
+
+The spec requires "HA mode (3 replicas, Raft storage)." Raft uses a quorum model — a majority must agree to commit writes. With 3 nodes, quorum is 2, so the cluster survives 1 node failing. With 1 node, there's no HA at all. With 2, quorum is still 2 (no advantage over 1). So 3 is the minimum for real HA.
+
+**Is it designed to map to cloud:**
+
+Yes. The exact same Helm values (`server.ha.enabled=true`, `server.ha.raft.enabled=true`, `replicas=3`) are used on EKS/AKS. The only things that change when moving to cloud:
+- Unseal: Shamir → KMS/Key Vault (eliminates the manual unseal step)
+- Storage: local PVCs → EBS/PD disks (persistent, don't vanish on restart)
+- Node lifecycle: managed, don't disappear when a laptop sleeps
+
+**Why it's fragile on kind:**
+
+kind runs inside Docker Desktop. When Docker restarts (laptop sleep, update, crash), the containers stop. On restart, the Raft group must re-elect a leader. This usually works, but if all 3 pods start simultaneously and the network isn't fully up yet, they can get stuck in a re-election loop. This is a kind/Docker limitation, not a Vault design flaw. On a real cluster, nodes don't all restart at once.
+
+**Ways to make it more sustainable (in order of effort):**
+
+1. **Accept it as ephemeral.** If it breaks, `kind delete cluster --name vaultly` + recreate is ~2 minutes. Faster than debugging. Have a single `rebuild.sh` script that does the whole thing.
+
+2. **Reduce to 1 replica for local dev.** Change `replicas=3` to `replicas=1`. No HA, but no Raft re-formation issues. Use 3 only when demonstrating HA. The spec deliverable is the cloud cluster, not kind.
+
+3. **Move to cloud sooner.** The moment AWS vs Azure is confirmed, the cloud cluster is more stable by default. The kind environment becomes a throwaway rehearsal.
+
+**For right now (the 0/1 pods):**
+
+The pods are 4m38s old and still 0/1. Check if vault-0 is actually the leader:
+
+```bash
+kubectl logs vault-0 -n vault --tail=20
+```
+
+If it shows "Raft: entering follower state" or "waiting for leader," the re-election is stuck. In that case:
+
+```bash
+kubectl delete pod vault-1 vault-2 -n vault
+```
+
+Leave vault-0 alone. It should become leader on its own, then recreate 1 and 2:
+
+```bash
+kubectl get pods -n vault -w
+```
+
+If vault-0 itself is stuck (no "active" in logs), the PVCs may be corrupted. Nuclear option:
+
+```bash
+helm uninstall vault -n vault
+kubectl delete pvc -n vault
+helm install vault hashicorp/vault --namespace vault \
+  --set "server.ha.enabled=true" \
+  --set "server.ha.raft.enabled=true" \
+  --set "replicas=3"
+```
+
+This loses all data (the test secret, the K8s auth config, the policy, the role). It would need to be re-done. Only do this if the logs confirm corruption.
+
+Show me the vault-0 log output first.
+

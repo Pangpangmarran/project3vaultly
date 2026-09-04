@@ -161,3 +161,19 @@ tests/             pytest suite, runs against a real Vault dev server
 docker/Dockerfile  non-root, healthchecked image
 docker-compose.yml Vault dev server + Vaultly for local use
 ```
+------------------------------------------------------------------
+
+For the local cluster:
+
+# Start of day
+./rebuild.sh
+
+# End of day
+./takedown.sh   
+
+Notes:
+
+rebuild.sh takes about 3–4 minutes (mostly the Docker build + kind image load).
+The .vault-local-credentials file stores the root token and all 5 unseal keys. It's gitignored. Delete it if you ever takedown and don't plan to rebuild (fresh cluster = fresh keys anyway).
+The helm repo add line is idempotent — it won't fail if the repo is already added.
+When the cloud cluster is ready, a separate rebuild-eks.sh / takedown-eks.sh will replace these. The local ones stay for quick iteration.
