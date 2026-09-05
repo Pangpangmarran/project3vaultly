@@ -30,7 +30,13 @@ helm install vault hashicorp/vault --namespace "$VAULT_NS" \
   --set "server.ha.replicas=1"   
   
 echo "=== 5/10: Waiting for vault-0 ==="
-kubectl wait --for=condition=exists pod/vault-0 -n "$VAULT_NS" --timeout=60s
+echo "Waiting for pod to appear..."
+for i in $(seq 1 30); do
+  if kubectl get pod vault-0 -n "$VAULT_NS" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
 kubectl wait --for=condition=ready pod/vault-0 -n "$VAULT_NS" --timeout=300s   
 
 echo "=== 6/10: Initializing Vault (Shamir 5/3) ==="
