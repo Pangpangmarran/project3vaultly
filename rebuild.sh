@@ -27,21 +27,22 @@ helm repo add hashicorp https://helm.releases.hashicorp.com 2>/dev/null || true
 helm install vault hashicorp/vault --namespace "$VAULT_NS" \
   --set "server.ha.enabled=true" \
   --set "server.ha.raft.enabled=true" \
-  --set "server.ha.replicas=1"   
+  --set "server.ha.replicas=3"   
   
 echo "=== 5/10: Waiting for vault-0 ==="
-echo "Waiting for pod to appear..."
-for i in $(seq 1 30); do
-  if kubectl get pod vault-0 -n "$VAULT_NS" >/dev/null 2>&1; then
+echo "Waiting for pod to be Running..."
+for i in $(seq 1 60); do
+  PHASE=$(kubectl get pod vault-0 -n "$VAULT_NS" -o jsonpath='{.status.phase}' 2>/dev/null)
+  if [ "$PHASE" = "Running" ]; then
     break
   fi
-  sleep 2
+  sleep 3
 done
-echo "Waiting for container to be running..."
-kubectl wait --for=condition=containersready pod/vault-0 -n "$VAULT_NS" --timeout=120s   
+echo "Pod phase: $PHASE"
+sleep 5       
 
 echo "=== 6/10: Initializing Vault (Shamir 5/3) ==="
-kubectl port-forward -n "$VAULT_NS" svc/vault-active 8200:8200 &
+kubectl port-forward -n "$VAULT_NS" pod/vault-0 8200:8200 &   
 PF_PID=$!
 sleep 3
 

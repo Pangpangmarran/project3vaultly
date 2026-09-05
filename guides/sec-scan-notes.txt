@@ -1,0 +1,36 @@
+CI/CD SECURITY SCAN — HOW IT MAPS TO THE SPEC
+==============================================
+
+Trivy (block on CRITICAL)
+    Job: trivy
+    Block condition: exit-code "1" + severity CRITICAL.
+    Pipeline fails if any fixed CRITICAL vulnerability is found.
+    ignore-unfixed: true means unfixed CRITICALs are reported
+    but do not block (base image may not have a patch yet).
+
+SAST (Semgrep for Python)
+    Job: semgrep
+    Block condition: reports to GitHub Security tab.
+    Does not block the pipeline by default.
+    Add "fail-on: true" to the action input if blocking is desired.
+
+Dependency scanning (pip-audit)
+    Job: pip-audit
+    Block condition: exits non-zero if any known vulnerable
+    dependency is found. Pipeline fails.
+
+No secrets in pipeline env vars
+    No secrets.* references in the workflow YAML.
+    Only GITHUB_TOKEN (built-in, read-only) is available.
+    All runtime secrets are pulled from Vault or AWS Secrets
+    Manager at deployment time, not stored in the pipeline.   
+
+Notes:
+
+ignore-unfixed: true on Trivy means it only blocks on CRITICALs that have a patch available. Unfixed CRITICALs are reported but don't fail the build (common in practice — the base image may not have a fix yet).
+
+Semgrep uses p/python (Python-specific security rules). The returntocorp/semgrep-action is the official action. If it causes issues, the alternative is pip install semgrep && semgrep scan --config p/python --sarif --output semgrep-results.sarif .
+
+The workflow runs on push to Local-testing (your working branch) and on PRs to main. Adjust branches as needed. 
+
+To test it: push the file to GitHub and watch the Actions tab. It should run all 3 jobs in parallel. 

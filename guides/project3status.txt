@@ -18,6 +18,7 @@ Current (wrong):  --set "replicas=1"
 Correct:          --set "server.ha.replicas=1"
 This is why 3 pods were created despite intending 1.
 After fixing: ./takedown.sh && ./rebuild.sh → should complete in ~2-3 min.
+-- In the end the 1 replica does not work as it gives error at step 5 in the script, waiting for vault-0, so going back to 3 replicas as this was working even if it was not perfect, this is only for local testing.
 
 **DONE (cumulative):**
 - [x] App understood & tested locally
