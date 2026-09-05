@@ -22,7 +22,7 @@ echo "=== 3/10: Creating namespaces ==="
 kubectl create ns "$VAULT_NS"
 kubectl create ns "$APP_NS"
 
-echo "=== 4/10: Installing Vault ==="
+echo "=== 4/10: Installing Vault (single node, local dev) ==="
 helm repo add hashicorp https://helm.releases.hashicorp.com 2>/dev/null || true
 helm install vault hashicorp/vault --namespace "$VAULT_NS" \
   --set "server.ha.enabled=true" \
