@@ -24,7 +24,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: vaultly:scan
-          format: sarif
+          format: table
           output: trivy-results.sarif
           severity: CRITICAL
           exit-code: "1"
@@ -39,21 +39,22 @@ jobs:
   semgrep:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep:latest
+    permissions:
+      security-events: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Semgrep
-        uses: returntocorp/semgrep-action@1.106.0
-        with:
-          config: p/python
-          generate SARIF: true
-          output: semgrep-results.sarif
+        run: semgrep scan --sarif --config p/python --output semgrep-results.sarif .
 
       - name: Upload Semgrep results
         if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: semgrep-results.sarif
+          sarif_file: semgrep-results.sarif   
 
   pip-audit:
     name: Dependency Scan (pip-audit)
