@@ -2,14 +2,14 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
 
-  name               = "vaultly"
-  kubernetes_version = "1.31"
-  endpoint_public_access = true
+  cluster_name    = "vaultly"
+  cluster_version = "1.31"
+  cluster_endpoint_public_access = true
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
-  enabled_log_types = ["api", "audit"]
+  cluster_enabled_log_types = ["api", "audit"]
 
   enable_irsa = true
 

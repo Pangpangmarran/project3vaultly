@@ -1,0 +1,13 @@
+Output from vpc.tf file
+
+Outputs:
+
+private_subnets = [
+  "subnet-0a3513c07f2544527",
+  "subnet-0dc9e454631ed6662",
+]
+public_subnets = [
+  "subnet-0ac31fe440f5c3c26",
+  "subnet-03035cadea254e253",
+]
+vpc_id = "vpc-039dfc74f175ec6e5"
