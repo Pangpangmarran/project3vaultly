@@ -1,0 +1,124 @@
+## PROJECT3 RESUME — Vaultly / AWS-or-Azure / Terraform
+**DATE:** 2026-09-04 (Fri) — full day tomorrow to finish
+
+**STATE:**
+- WSL2 + Docker Desktop, repo: ~/devops/projects/project3/project3vaultly/
+- venv active, requirements-dev.txt installed
+- kind cluster "vaultly" — running (3 nodes Ready)
+- Vault: 3 replicas deployed (WRONG — should be 1 for local, see BUG below)
+- Vault pods: 0/1 (stuck, Raft quorum issue with 3 replicas on kind)
+- Vaultly pod: CrashLoopBackOff (can't reach sealed/stuck Vault)
+- Branch: Local-testing
+- Scripts in repo: rebuild.sh, takedown.sh (chmod +x done)
+- .gitignore has .vault-local-credentials
+
+**BUG TO FIX FIRST (one line in rebuild.sh, step 4):**
+The chart parameter is `server.ha.replicas`, NOT top-level `replicas`.
+Current (wrong):  --set "replicas=1"
+Correct:          --set "server.ha.replicas=1"
+This is why 3 pods were created despite intending 1.
+After fixing: ./takedown.sh && ./rebuild.sh → should complete in ~2-3 min.
+
+**DONE (cumulative):**
+- [x] App understood & tested locally
+- [x] Git auth, Push Protection
+- [x] kind cluster, Vault HA (Raft), KV v2
+- [x] Docker image built, loaded into kind
+- [x] K8s auth method fully working (verified PUT/GET)
+  - ServiceAccount vaultly-sa in ns vaultly
+  - ClusterRoleBinding vault-tokenreview-binding (vault:vault → system:auth-delegator)
+  - vault auth enable kubernetes + config (kubernetes_host=https://kubernetes.default.svc)
+  - Policy vaultly-policy (secret/data/vaultly/*, secret/metadata/vaultly/*)
+  - Role vaultly (bound SA: vaultly-sa, bound ns: vaultly, ttl=1h, max_ttl=4h)
+  - k8s/vaultly.yml: serviceAccountName, auth_method=kubernetes, k8s_role=vaultly
+- [x] rebuild.sh + takedown.sh written (rebuild needs the 1-line fix above)
+- [x] DECISIONS.txt written (decided vs not-decided)
+
+**KEY CONFIG FACTS:**
+- App port: 8080
+- App routes: /healthz, /readyz, /api/v1/secrets/{path}
+- Vault address from pod: http://vault-active.vault.svc:8200
+- Vault env prefix: VAULTLY_
+- VAULTLY_VAULT_AUTH_METHOD = kubernetes
+- VAULTLY_VAULT_K8S_ROLE = vaultly
+- serviceAccountName: vaultly-sa
+- App KV path = URL path. Policy restricts to vaultly/* → API calls use /api/v1/secrets/vaultly/...
+- VAULTLY_API_BEARER_TOKEN = dev-token-change-me (hardcoded, move to secret later)
+- Control-plane taint must be removed after kind create (rebuild.sh handles this)
+- Helm chart param for replica count: server.ha.replicas (NOT replicas)
+
+**TOMORROW'S PLAN (full day, in order):**
+
+A) Fix rebuild.sh (1 line), run takedown + rebuild, verify PUT/GET works
+B) Secrets rotation demo
+   - Write vaultly/database secret in Vault
+   - Change the value
+   - Show app picks it up on next poll (no restart)
+C) K8s RBAC hardening
+   - runAsNonRoot: true, runAsUser: 1000 in pod spec
+   - Verify pod runs as non-root
+D) CI/CD scanning workflow (GitHub Actions)
+   - Trivy (block on CRITICAL)
+   - Semgrep (Python SAST)
+   - pip-audit (dependencies)
+   - No secrets in pipeline env vars
+E) Docs
+   - README.md: threat model
+   - Architecture diagram with trust boundaries
+   - Secrets rotation runbook
+F) Hosting (once AWS vs Azure confirmed)
+   - Terraform: S3/Storage state bucket + KMS/Key Vault key
+   - Terraform: VPC/VNet (public + private subnets)
+   - Terraform: EKS/AKS cluster (replicas=3, IRSA)
+   - Vault on cloud with KMS/Key Vault auto-unseal
+   - K8s auth on cloud (same as kind, just re-point)
+   - OIDC (GitHub → cloud STS/AD)
+   - GuardDuty/Defender + CloudTrail/Activity Log + 1 query
+   - Security group documentation (why each rule exists)
+
+**NOT DECIDED (waiting on course confirmation):**
+- [ ] Cloud provider (AWS or Azure)
+- [ ] EKS or AKS
+- [ ] KMS or Azure Key Vault auto-unseal
+- [ ] OIDC target (AWS STS or Azure AD)
+- [ ] Terraform provider (aws or azurerm)
+- [ ] GuardDuty or Defender
+- [ ] CloudTrail or Activity Log
+
+**UNRESOLVED / MINOR:**
+- VAULTLY_API_BEARER_TOKEN hardcoded in YAML (move to k8s secret)
+- No imagePullPolicy: Never in YAML
+- App logs "DB credential secret not found at path=vaultly/database" (expected until rotation demo)
+- vaultly-secrets k8s secret may still exist from old setup (delete if present)
+
+**KEY LESSONS / NOTES:**
+- App uses VAULTLY_ prefix on ALL env vars
+- VAULTLY_VAULT_ADDR must be http://vault-active.vault.svc:8200
+- App KV path = URL path directly
+- Heredocs break in this terminal — use echo lines or cat > file
+- kind get kubeconfig --name vaultly > ~/.kube/config fixes kubectl if context is wrong
+- Helm chart: server.ha.replicas (not replicas) controls Vault pod count
+- 1 replica for kind (no quorum issues), 3 replicas for cloud (real HA)
+- User gets burned out easily — keep chunks short, one thing at a time
+- User prefers objective/educational tone over direct "you" speak
+- User tends to typo vaultly vs vaulty — double-check namespace names
+- WSL2: VS Code auto-forwards Vault 8200, NOT app port 8080
+
+**START (tomorrow):**
+cd ~/devops/projects/project3/project3vaultly
+source .venv/bin/activate
+
+# Fix the one line in rebuild.sh:
+#   --set "replicas=1"  →  --set "server.ha.replicas=1"
+
+# Clean rebuild:
+./takedown.sh
+./rebuild.sh
+
+# Verify:
+kubectl get pods -n vault vaultly
+kubectl port-forward -n vaultly svc/vaultly 8080:8080 &
+curl -X PUT http://127.0.0.1:8080/api/v1/secrets/vaultly/test \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer dev-token-change-me" \
+  -d '{"data": "hello"}'   
