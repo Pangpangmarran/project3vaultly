@@ -1,40 +1,29 @@
-module "eks" {
-  source  = "terraform-aws-modules/eks/aws"
-  version = "~> 21.0"
-
-  name               = "vaultly"
-  kubernetes_version = "1.31"
-  endpoint_public_access = true
-
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnets
-
-  enabled_log_types = ["api", "audit"]
-
-  enable_irsa = true
-
-  eks_managed_node_groups = {
-    vaultly = {
-      instance_types = ["t3.medium"]
-      min_size     = 2
-      max_size     = 2
-      desired_size = 2
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
     }
   }
 
-  tags = {
-    Project = "vaultly"
+  backend "s3" {
+    bucket         = "vaultly-tf-state-686699774218"
+    key            = "vaultly/main.tfstate"
+    region         = "eu-central-1"
+    dynamodb_table = "vaultly-tf-locks"
+    encrypt        = true
   }
 }
 
-output "cluster_name" {
-  value = module.eks.cluster_name
+provider "aws" {
+  region = "eu-central-1"
 }
 
-output "cluster_endpoint" {
-  value = module.eks.cluster_endpoint
-}
+resource "aws_s3_bucket" "test" {
+  bucket = "vaultly-test-686699774218"
 
-output "cluster_ca_certificate" {
-  value = module.eks.cluster_ca_certificate
+  tags = {
+    Project = "vaultly"
+    Purpose = "backend verification"
+  }
 }   
