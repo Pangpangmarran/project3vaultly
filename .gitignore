@@ -10,6 +10,9 @@ venv/
 linux-amd64
 project.md
 .vault-local-credentials
+terraform_1.9.8_linux_amd64.zip
+terraform/.terraform
+terraform/bootstrap/.terraform
 
 # Lab assignment document lives alongside this repo locally but is not
 # part of the published Vaultly application.
