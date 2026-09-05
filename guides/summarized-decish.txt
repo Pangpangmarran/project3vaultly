@@ -1,5 +1,90 @@
 Project 3 — Vaultly / AWS / Terraform — Decisions
 
+PROJECT 3 — DECISIONS
+=====================
+
+DECIDED (executed)
+------------------
+
+[x] App is Vaultly (Python/FastAPI, KV v2)
+    Cloned, run locally, tested. PUT/GET verified.
+    Talks to Vault via VAULT_ADDR + VAULT_TOKEN env vars.
+
+[x] Vault storage is Raft
+    Running on kind (1 replica, local dev).
+    3 replicas planned for EKS (real HA, quorum).
+    Self-contained, no external dep (no Consul, no etcd).
+
+[x] Local practice is kind (1 CP + 2 workers)
+    Cluster "vaultly" running, 3 nodes Ready.
+    1 Vault replica locally to avoid Raft quorum issues on Docker restarts.
+
+[x] kind config lives in repo at infra/kind/kind-config.yaml
+    Version-controlled, in use.
+
+[x] Token strategy — K8s auth (ServiceAccount)
+    ServiceAccount vaultly-sa, bound to Vault role "vaultly".
+    Static root token removed from app. Root token retained for admin ops only.
+    Same flow applies on EKS (no changes needed when migrating).
+
+[x] K8s auth method enabled and verified
+    vault auth enable kubernetes + config (kubernetes_host in-cluster).
+    Policy vaultly-policy (secret/data/vaultly/*, secret/metadata/vaultly/*).
+    Role vaultly (bound SA: vaultly-sa, bound ns: vaultly, ttl=1h, max_ttl=4h).
+    ClusterRoleBinding vault-tokenreview-binding (vault:vault → system:auth-delegator).
+
+
+DECIDED (not yet executed)
+--------------------------
+
+[ ] Cloud provider is AWS
+    Confirmed by course. eu-central-1 region.
+    AWS CLI installed and configured locally.
+
+[ ] Final Kubernetes deliverable is EKS
+    Managed node group, IRSA enabled.
+    Required for OIDC → AWS STS flow and KMS auto-unseal.
+
+[ ] Auto-unseal mechanism is AWS KMS
+    No manual step on pod restart.
+    KMS key scoped to the Vault cluster (only Vault can decrypt).
+
+[ ] Cloud auth from CI is OIDC (GitHub → AWS STS)
+    No long-lived IAM access keys.
+    Each pipeline run gets a short-lived token scoped to the role.
+
+[ ] VPC layout: public + private subnets
+    Vault + database in private subnets (no public IP).
+    Only load balancer in public subnet.
+    Terraform module: terraform-aws-modules/vpc/aws.
+
+[ ] Security posture tooling is AWS GuardDuty
+    Enable and show console.
+
+[ ] Audit logging is CloudTrail → S3
+    Write one Athena query against the trail.
+
+[ ] IaC tool is Terraform
+    Provider: hashicorp/aws.
+    Remote state: S3 bucket + KMS encryption.
+    No .tf files written yet.
+
+[ ] CI/CD tool is GitHub Actions
+    Free for private repos, native OIDC provider, easy YAML.
+    No workflow YAML written yet.
+
+[ ] App-level CI scope is lint + test + build only
+    Trivy, SAST, dependency scanning, and OIDC cloud auth
+    live in a separate DevSecOps workflow, not the app repo.
+
+[ ] No secrets in pipeline env vars
+    All pulled from Vault or AWS Secrets Manager at runtime.
+
+[ ] Terraform provider is hashicorp/aws
+    Region: eu-central-1.
+    State backend: S3 + KMS.
+    Modules: terraform-aws-modules/vpc, terraform-aws-modules/eks.   
+
 KEY CONFIG FACTS:
 
 - App port: 8080
@@ -16,52 +101,6 @@ KEY CONFIG FACTS:
 - vaultly-secrets k8s secret still exists (can be deleted, no longer referenced)
 - VAULTLY_API_BEARER_TOKEN still hardcoded in YAML (move to secret later)
 
-PROJECT 3 — DECISIONS
-=====================
-
-DECIDED (cloud-agnostic, safe to build on)
-------------------------------------------
-
-[x] App is Vaultly (Python/FastAPI, KV v2)
-    Cloned, run locally, tested. PUT/GET verified.
-    Talks to Vault via VAULT_ADDR + VAULT_TOKEN env vars.
-
-[x] Vault storage is Raft (HA, 3 replicas)
-    Running on kind. 3 pods, self-contained, no external dep.
-
-[x] Local practice is kind (1 CP + 2 workers)
-    Cluster "vaultly" running, 3 nodes Ready.
-
-[x] kind config lives in repo at infra/kind/kind-config.yaml
-    Version-controlled, in use.
-
-[x] Token strategy — root token (kind, local only)
-    Root token saved, used in vaultly-secrets k8s secret.
-    ServiceAccount/AppRole for prod is NOT done yet.
-
-[ ] IaC tool is Terraform
-    Decided, but no .tf files written yet.
-
-[ ] CI/CD tool is GitHub Actions
-    Decided, but no workflow YAML written yet.
-
-[ ] App-level CI scope is lint + test + build only
-    Decided, not implemented.
-
-[ ] No secrets in pipeline env vars
-    Decided, not implemented (no pipeline exists yet).
-
-
-NOT DECIDED (hosting-dependent, may change if Azure)
------------------------------------------------------
-
-[ ] Cloud provider (AWS or Azure)
-[ ] Final Kubernetes deliverable (EKS or AKS)
-[ ] Auto-unseal mechanism (AWS KMS or Azure Key Vault)
-[ ] Cloud auth from CI (OIDC to AWS STS or Azure AD)
-[ ] VPC/VNet layout and Terraform module (aws vs azurerm)
-[ ] Security posture tooling (GuardDuty or Defender for Cloud)
-[ ] Audit logging (CloudTrail to S3 or Activity Log to Storage Account)
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 

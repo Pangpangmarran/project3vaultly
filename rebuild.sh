@@ -37,7 +37,8 @@ for i in $(seq 1 30); do
   fi
   sleep 2
 done
-kubectl wait --for=condition=ready pod/vault-0 -n "$VAULT_NS" --timeout=300s   
+echo "Waiting for container to be running..."
+kubectl wait --for=condition=containersready pod/vault-0 -n "$VAULT_NS" --timeout=120s   
 
 echo "=== 6/10: Initializing Vault (Shamir 5/3) ==="
 kubectl port-forward -n "$VAULT_NS" svc/vault-active 8200:8200 &
